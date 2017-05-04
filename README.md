@@ -76,3 +76,7 @@ Some work has been done to prepare for a Windows port but this is incomplete. Pu
 ## License
 
 MIT license.
+
+## Changes
+
+ * Version 1.0: initial release!

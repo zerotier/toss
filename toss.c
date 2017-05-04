@@ -261,7 +261,11 @@ int main(int argc,char **argv)
 		} else {
 			lseek(filefd,0,SEEK_SET);
 			off_t flen = (off_t)filelen;
+#if defined(__linux__) || defined(linux) || defined(__LINUX__) || defined(__linux)
+			if (sendfile(csock,filefd,(off_t *)0,(size_t)filelen) < 0) {
+#else
 			if (sendfile(filefd,csock,0,&flen,(struct sf_hdtr *)0,0)) {
+#endif
 				fprintf(stderr,"sendfile() failed.\n");
 			} else if (flen != (off_t)filelen) {
 				fprintf(stderr,"sendfile() incomplete, wrote %llu bytes.\n",(unsigned long long)flen);

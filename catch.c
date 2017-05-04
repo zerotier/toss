@@ -14,7 +14,7 @@ int __cdecl _tmain(int argc, _TCHAR* argv[])
 int main(int argc,char **argv)
 #endif
 {
-	static uint8_t buf[131072]; /* WARNING: can't use in multithreaded programs without making non-static */
+	static uint8_t buf[1048576]; /* WARNING: can't use in multithreaded programs without making non-static */
 	char frombuf[128];
 	long n;
 	struct speck_hash sh;
@@ -34,7 +34,7 @@ int main(int argc,char **argv)
 	char plainname[TOSS_MAX_TOKEN_BYTES];
 	uint8_t token[TOSS_MAX_TOKEN_BYTES + 8];
 	unsigned int tokenlen = 0;
-	char *hrtok = strchr(argv[1],'@');
+	const char *hrtok = strchr(argv[1],'/');
 	if (hrtok) {
 		unsigned int i = (unsigned int)(hrtok - argv[1]);
 		memcpy(plainname,argv[1],i);
@@ -44,27 +44,23 @@ int main(int argc,char **argv)
 		plainname[0] = (char)0;
 		hrtok = argv[1];
 	}
-	while (*hrtok) {
+	while (strlen(hrtok) >= 8) {
 		if (tokenlen >= TOSS_MAX_TOKEN_BYTES) {
 			fprintf(stderr,"%s: FATAL: invalid token (too long)\n",argv[0]);
-			return 1;
-		}
-		if (strlen(hrtok) < 8) { /* total length must be a multiple of 8 */
-			fprintf(stderr,"%s: FATAL: invalid or incomplete token (make sure you get both lines if it wraps in terminal)\n",argv[0]);
 			return 1;
 		}
 		base32_8_to_5(hrtok,token + tokenlen);
 		tokenlen += 5;
 		hrtok += 8;
 	}
-	if (tokenlen <= 18) {
+	if ((tokenlen <= 18)||((tokenlen % 5) != 0)) {
 		fprintf(stderr,"%s: FATAL: invalid or incomplete token (make sure you get both lines if it wraps in terminal)\n",argv[0]);
 		return 1;
 	}
 
 	unsigned int port = (((unsigned int)token[0] & 0xff) << 8) | (token[1] & 0xff);
 	if ((!port)||(port > 0xffff)) {
-		fprintf(stderr,"%s: FATAL: invalid token (bad port)\n",argv[0]);
+		fprintf(stderr,"%s: FATAL: invalid token (bad port %u)\n",argv[0],port);
 		return 1;
 	}
 	uint64_t filelen = 0;
@@ -101,12 +97,16 @@ int main(int argc,char **argv)
 	speck_hash_update(&sh,"hello",5);
 	speck_hash_finalize(&sh,hello);
 
-	printf("%s: %s (%llu bytes)\n",argv[0],destpath,(unsigned long long)filelen);
+	if (filelen == TOSS_PIPE_FILE_SIZE) {
+		printf("%s: catching %s (size unknown)\n",argv[0],destpath);
+	} else {
+		printf("%s: catching %s (%llu bytes)\n",argv[0],destpath,(unsigned long long)filelen);
+	}
 
 	int ok = 1;
 	for(int k=0;k<TRY_SCOPE_COUNT;++k) {
 		for(unsigned int i=18;i<tokenlen;) {
-			unsigned int iplen = token[i]; ++i;
+			unsigned int iplen = token[i++];
 			if (i >= tokenlen) break;
 
 			struct sockaddr_storage sa;
@@ -132,18 +132,29 @@ int main(int argc,char **argv)
 			i += iplen;
 
 			if ((fromaddr)&&(ipsc == TRY_SCOPE_ORDER[k])) {
-				printf("%s: %s/%u ",argv[0],fromaddr,port); fflush(stdout);
+				fprintf(stderr,"%s: %s/%u ",argv[0],fromaddr,port); fflush(stderr);
 
 				int csock = socket(sa.ss_family,SOCK_STREAM,0);
 				if (csock < 0) {
 					fprintf(stderr,"%s: FATAL: socket() failed\n",argv[0]);
 					return 1;
 				}
+
+#ifdef TOSS_CATCH_MAX_HOPS
+				if (sa.ss_family == AF_INET) {
+					int opt = TOSS_CATCH_MAX_HOPS;
+					setsockopt(csock,IPPROTO_IP,IP_TTL,(void *)&opt,sizeof(opt));
+				} else if (sa.ss_family == AF_INET6) {
+					int opt = TOSS_CATCH_MAX_HOPS;
+					setsockopt(csock,IPPROTO_IPV6,IPV6_UNICAST_HOPS,(void *)&opt,sizeof(opt));
+				}
+#endif
+
 				alarm(TRY_SCOPE_TIMEOUT[k]);
 				if (connect(csock,(struct sockaddr *)&sa,(sa.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6))) {
 					alarm(0);
 					close(csock);
-					printf("connect failed.\n");
+					fprintf(stderr,"connect failed.\n");
 					continue;
 				}
 				alarm(0);
@@ -153,36 +164,39 @@ int main(int argc,char **argv)
 					helloptr += n;
 				if (helloptr != 16) {
 					close(csock);
-					printf("bad greeting (incomplete).\n");
+					fprintf(stderr,"bad greeting (incomplete).\n");
 					continue;
 				}
 				if (memcmp(buf,hello,16)) {
 					close(csock);
-					printf("bad greeting (invalid).\n");
+					fprintf(stderr,"bad greeting (invalid).\n");
 					continue;
 				}
 
 				send(csock,claim,16,0);
 
-				int filefd = open(destpath,O_WRONLY|O_CREAT|O_TRUNC,0644);
-				if (filefd < 0) {
-					close(csock);
-					printf("cannot open file for writing.\n");
-					fprintf(stderr,"FATAL: cannot open destination for writing: %s",destpath);
-					return 1;
+				int filefd;
+				if (!strcmp(destpath,"-")) {
+					filefd = STDOUT_FILENO;
+				} else {
+					filefd = open(destpath,O_WRONLY|O_CREAT|O_TRUNC,0644);
+					if (filefd < 0) {
+						close(csock);
+						fprintf(stderr,"cannot open file for writing.\n%s: FATAL: cannot open destination for writing: %s",argv[0],destpath);
+						return 1;
+					}
 				}
 
 				uint64_t filegot = 0;
 				speck_hash_reset(&sh);
 
 				while ((n = recv(csock,buf,sizeof(buf),0)) > 0) {
-					printf("."); fflush(stdout);
+					fprintf(stderr,"."); fflush(stderr);
 					speck_hash_update(&sh,buf,(unsigned long)n);
 					if ((long)write(filefd,buf,n) != n) {
 						close(csock);
 						close(filefd);
-						printf("write error.\n");
-						fprintf(stderr,"FATAL: write error: %s",destpath);
+						fprintf(stderr,"write error.\n%s: FATAL: write error: %s",argv[0],destpath);
 						return 1;
 					}
 					filegot += (uint64_t)n;
@@ -191,10 +205,11 @@ int main(int argc,char **argv)
 				close(filefd);
 
 				speck_hash_finalize(&sh,buf);
-				if ((memcmp(token + 10,buf,8))||(filelen != filegot)) {
-					printf("got %llu bytes, HASH VERIFICATION FAILED! file may be corrupt!\n",(unsigned long long)filegot);
+				if ((filelen != TOSS_PIPE_FILE_SIZE)&&((memcmp(token + 10,buf,8))||(filelen != filegot))) {
+					fprintf(stderr,"got %llu bytes, VERIFICATION FAILED! file may be corrupt!\n",(unsigned long long)filegot);
 				} else {
-					printf("caught %llu bytes, hash OK, wrote to: %s\n",(unsigned long long)filegot,destpath);
+					ok = 0;
+					fprintf(stderr,"wrote %llu bytes to: %s\n",(unsigned long long)filegot,(filefd == STDOUT_FILENO) ? "(stdout)" : destpath);
 				}
 
 				k = TRY_SCOPE_COUNT + 1; /* break outer loop */
@@ -204,7 +219,7 @@ int main(int argc,char **argv)
 	}
 
 	if (ok)
-		printf("%s: FAILED to catch.\n",argv[0]);
+		printf("%s: no addresses worked! bad token or no network path?\n",argv[0]);
 
 	return ok;
 }

@@ -21,7 +21,7 @@ int main(int argc,char **argv)
 	srand((unsigned int)time(0));
 
 	if (argc != 2) {
-		printf("Usage: %s <file>\n",argv[0]);
+		fprintf(stderr,"Usage: %s <file>\n",argv[0]);
 		return 1;
 	}
 
@@ -68,12 +68,6 @@ int main(int argc,char **argv)
 						ipscope = classify_ip4((struct sockaddr_in *)ifa->ifa_addr);
 						if ((ipscope == IP_SCOPE_PRIVATE)||(ipscope == IP_SCOPE_GLOBAL)||(ipscope == IP_SCOPE_SHARED)) {
 							memcpy(ip4s + ip4ptr,&(((const struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr),4);
-							/*
-							fprintf(stderr,"%s: found IPv4: ",argv[0]);
-							for(int i=0;i<4;++i)
-								fprintf(stderr,"%s%u",((i > 0) ? "." : ""),(unsigned int)ip4s[ip4ptr + i]);
-							fprintf(stderr,"\n");
-							*/
 							ip4ptr += 4;
 						}
 					}
@@ -83,12 +77,6 @@ int main(int argc,char **argv)
 						ipscope = classify_ip6((struct sockaddr_in6 *)ifa->ifa_addr);
 						if ((ipscope == IP_SCOPE_PRIVATE)||(ipscope == IP_SCOPE_GLOBAL)||(ipscope == IP_SCOPE_SHARED)) {
 							memcpy(ip6s + ip6ptr,((const struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr.s6_addr,16);
-							/*
-							fprintf(stderr,"%s: found IPv6: ",argv[0]);
-							for(int i=0;i<16;++i)
-								fprintf(stderr,"%.2x",(unsigned int)ip6s[ip6ptr + i]);
-							fprintf(stderr,"\n");
-							*/
 							ip6ptr += 16;
 						}
 					}
@@ -100,28 +88,31 @@ int main(int argc,char **argv)
 #endif
 
 	int filefd;
+	uint8_t filedigest[16];
+	uint64_t filelen = 0;
 	if (!strcmp(plainname,"-")) {
 		filefd = STDIN_FILENO;
-		plainname = (char *)0;
+		plainname = (char *)0; /* will be filled in later */
+		for(int i=0;i<16;++i)
+			filedigest[i] = (uint8_t)rand(); /* digest is unused with pipes, so randomize it to randomize the token */
+		filelen = TOSS_PIPE_FILE_SIZE;
 	} else {
 		filefd = open(argv[1],O_RDONLY);
-	}
-	if (filefd < 0) {
-		fprintf(stderr,"%s: FATAL: unable to open for reading: %s\n",argv[0],argv[1]);
-		return 1;
-	}
-	uint8_t filedigest[16];
-	speck_hash_reset(&sh);
-	uint64_t filelen = 0;
-	while ((n = (long)read(filefd,buf,sizeof(buf))) > 0) {
-		filelen += (uint64_t)n;
-		speck_hash_update(&sh,buf,(unsigned long)n);
-	}
-	speck_hash_finalize(&sh,filedigest);
-	if (!filelen) {
-		close(filefd);
-		fprintf(stderr,"%s: FATAL: zero byte file: %s\n",argv[0],argv[1]);
-		return 1;
+		if (filefd < 0) {
+			fprintf(stderr,"%s: FATAL: unable to open for reading: %s\n",argv[0],argv[1]);
+			return 1;
+		}
+		speck_hash_reset(&sh);
+		while ((n = (long)read(filefd,buf,sizeof(buf))) > 0) {
+			filelen += (uint64_t)n;
+			speck_hash_update(&sh,buf,(unsigned long)n);
+		}
+		speck_hash_finalize(&sh,filedigest);
+		if (!filelen) {
+			close(filefd);
+			fprintf(stderr,"%s: FATAL: zero byte file: %s\n",argv[0],argv[1]);
+			return 1;
+		}
 	}
 
 	int lsock = -1;
@@ -193,7 +184,6 @@ int main(int argc,char **argv)
 	n = 0;
 	for(int i=0;i<tokenlen;i+=5) {
 		base32_5_to_8(token + i,hrtok + n);
-		i += 5;
 		n += 8;
 	}
 	hrtok[n] = (char)0;
@@ -212,10 +202,9 @@ int main(int argc,char **argv)
 	speck_hash_update(&sh,"hello",5);
 	speck_hash_finalize(&sh,hello);
 
-	printf("%s%s%s\n",(plainname) ? plainname : "",(plainname) ? "/" : "",hrtok);
+	fprintf(stderr,"%s%s%s\n",(plainname) ? plainname : "",(plainname) ? "/" : "",hrtok);
 
-	int ok = 1;
-	for(int k=0;k<16;++k) {
+	for(;;) {
 		if (listen(lsock,4)) {
 			close(filefd);
 			close(lsock);
@@ -241,7 +230,7 @@ int main(int argc,char **argv)
 		if (!fromasc)
 			fromasc = "(unknown)";
 
-		printf("%s: %s ",argv[0],fromasc); fflush(stdout);
+		fprintf(stderr,"%s: %s ",argv[0],fromasc); fflush(stderr);
 
 		send(csock,hello,16,0);
 
@@ -250,40 +239,45 @@ int main(int argc,char **argv)
 			claimptr += n;
 		if (claimptr != 16) {
 			close(csock);
-			printf("empty or invalid claim code, waiting again...\n");
+			fprintf(stderr,"empty or invalid claim code, waiting again...\n");
 			continue;
 		}
 		if (memcmp(buf,claim,16)) {
-			printf("invalid claim code, waiting again...\n");
+			fprintf(stderr,"invalid claim code, waiting again...\n");
 			close(csock);
 			continue;
 		}
 
-		printf("got claim, sending... "); fflush(stdout);
-		lseek(filefd,0,SEEK_SET);
-		off_t flen = (off_t)filelen;
-		if (sendfile(filefd,csock,0,&flen,(struct sf_hdtr *)0,0)) {
-			printf("sendfile() failed, waiting again...\n");
-			close(csock);
-			continue;
-		} else if (flen != (off_t)filelen) {
-			printf("sendfile() incomplete (wrote %lu bytes), waiting again...\n",(unsigned long)flen);
-			close(csock);
-			continue;
-		} else {
-			ok = 0;
-			printf("was tossed %llu bytes.\n",(unsigned long long)filelen);
+		fprintf(stderr,"claim OK... "); fflush(stderr);
+		if (filefd == STDIN_FILENO) {
+			n = 0;
+			uint64_t wrote = 0;
+			while ((n = read(filefd,buf,sizeof(buf))) > 0) {
+				if ((long)send(csock,buf,n,0) != n) {
+					fprintf(stderr,"send incomplete (wrote %llu bytes), waiting again.\n",(unsigned long long)wrote);
+					break;
+				}
+				wrote += n;
+			}
+			fprintf(stderr,"tossed %llu bytes, waiting again.\n",(unsigned long long)wrote);
 			shutdown(csock,SHUT_WR);
-			close(csock);
-			break;
+		} else {
+			lseek(filefd,0,SEEK_SET);
+			off_t flen = (off_t)filelen;
+			if (sendfile(filefd,csock,0,&flen,(struct sf_hdtr *)0,0)) {
+				fprintf(stderr,"sendfile() failed, waiting again.\n");
+			} else if (flen != (off_t)filelen) {
+				fprintf(stderr,"sendfile() incomplete (wrote %llu bytes), waiting again.\n",(unsigned long long)flen);
+			} else {
+				fprintf(stderr,"tossed %llu bytes, waiting again.\n",(unsigned long long)filelen);
+				shutdown(csock,SHUT_WR);
+			}
 		}
+		close(csock);
 	}
 
 	close(filefd);
 	close(lsock);
 
-	if (ok)
-		printf("%s: FAILED to toss: %s\n",argv[0],argv[1]);
-
-	return ok;
+	return 0;
 }

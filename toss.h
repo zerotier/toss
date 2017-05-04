@@ -35,4 +35,10 @@
 /* Do not change, must be a multiple of 5 */
 #define TOSS_MAX_TOKEN_BYTES 500
 
+/* Max IP hops (IP TTL) for catch */
+/* #define TOSS_CATCH_MAX_HOPS 2 */
+
+/* Size indicating the "file" is a pipe */
+#define TOSS_PIPE_FILE_SIZE 0xffffffffffffffffULL
+
 #endif

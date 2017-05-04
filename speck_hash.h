@@ -78,8 +78,8 @@ static void speck_hash_finalize(struct speck_hash *h,uint8_t digest[16])
 		speck_encrypt(h->digest,tmp,h->nextblk);
 
 	/* Merkle–Damgård length padding */
-	pad[0] = h->totallen;
-	pad[1] = ~h->totallen;
+	pad[0] = (uint64_t)h->totallen;
+	pad[1] = ~((uint64_t)h->totallen);
 	speck_encrypt(h->digest,tmp,pad);
 	h->digest[0] ^= tmp[0];
 	h->digest[1] ^= tmp[1];

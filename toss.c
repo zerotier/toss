@@ -261,6 +261,8 @@ int main(int argc,char **argv)
 			}
 			fprintf(stderr,"tossed %llu bytes, waiting again.\n",(unsigned long long)wrote);
 			shutdown(csock,SHUT_WR);
+			close(csock);
+			break;
 		} else {
 			lseek(filefd,0,SEEK_SET);
 			off_t flen = (off_t)filelen;
@@ -272,8 +274,8 @@ int main(int argc,char **argv)
 				fprintf(stderr,"tossed %llu bytes, waiting again.\n",(unsigned long long)filelen);
 				shutdown(csock,SHUT_WR);
 			}
+			close(csock);
 		}
-		close(csock);
 	}
 
 	close(filefd);

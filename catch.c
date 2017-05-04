@@ -189,8 +189,7 @@ int main(int argc,char **argv)
 
 				uint64_t filegot = 0;
 				speck_hash_reset(&sh);
-
-				while ((n = recv(csock,buf,sizeof(buf),0)) > 0) {
+				while (((n = recv(csock,buf,sizeof(buf),0)) > 0)&&(filegot < filelen)) {
 					fprintf(stderr,"."); fflush(stderr);
 					speck_hash_update(&sh,buf,(unsigned long)n);
 					if ((long)write(filefd,buf,n) != n) {

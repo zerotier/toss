@@ -4,3 +4,10 @@ all:
 
 clean:
 	rm -f *.o toss catch
+
+install: all
+	sudo mkdir -p /usr/local/bin
+	sudo cp toss catch /usr/local/bin
+	sudo chown 0 /usr/local/bin/toss /usr/local/bin/catch
+	sudo chgrp 0 /usr/local/bin/toss /usr/local/bin/catch
+	sudo chmod 0755 /usr/local/bin/toss /usr/local/bin/catch

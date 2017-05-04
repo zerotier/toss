@@ -3,6 +3,26 @@ toss: dead simple LAN file transfer
 
 Toss is a convenient ultra-minimal command line tool to send files over local area networks.
 
+### Toss a file between two terminal windows
+
+System 1:
+
+
+
+System 2:
+
+
+
+### Toss a file to your team
+
+### Send something to an IRC channel from a VPS
+
+### Stream a huge archive between systems
+
+### Toss the output of a command to a team member
+
+## Description
+
 The `toss` program outputs a token generated from a random local TCP port, the size of the file you're sending, a hash of the file's contents (unless it's a pipe), and all the available IP addresses on all the interfaces in your system. It then listens for `catch` to connect and if presented with the correct claim token streams the file. If its input is a file it will continue to service `catch` requests one after the other (not concurrently) until it is terminated with CTRL+C or a kill signal. For pipes it terminates when the pipe closes.
 
 The `catch` program takes a `toss` token and then attempts to connect to all the IP addresses specified in it. If connection is successful it listens for a hello message (based on the hashed token) and if this is correct sends a claim message (a different version of the hashed token). If this exchange succeeds `toss` will send the file and `catch` will receive it.
@@ -26,25 +46,6 @@ The `catch` command prioritizes private IP addresses and only tries globally sco
 On Linux, Mac, and BSD just type `make`. The source is self-contained and there are no dependencies.
 
 Some work has been done to prepare for a Windows port but this is incomplete. Pull requests are welcome.
-
-## Examples
-
-### Toss a file between two terminal windows
-
-System 1:
-
-
-System 2:
-
-
-
-### Toss a file to your team
-
-### Send something to an IRC channel from a VPS
-
-### Stream a huge archive between systems
-
-### Toss the output of a command to a team member
 
 ## License
 

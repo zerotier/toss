@@ -3,6 +3,11 @@
 #ifndef TOSS_H__
 #define TOSS_H__
 
+#if defined(__linux__) || defined(linux) || defined(__LINUX__) || defined(__linux)
+#undef _FILE_OFFSET_BITS
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

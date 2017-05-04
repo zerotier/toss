@@ -1,11 +1,11 @@
 #ifndef TOSS_SPECK_HASH_H
 #define TOSS_SPECK_HASH_H
 
-/* This is a very tiny portable hash function built from the Speck cipher.
- * Since toss is not a crypto utility, its purpose is just to provide a
- * reasonably strong CRC-ish hash that has *some* collision resistance.
- * Don't rely on this for real security. If you need that, encrypt your
- * stuff with GPG or something prior to toss'ing it. */
+/* This is used for payload verification and generating a claim code.
+ * At only 128 bits and built from a "weird" block cipher, it's should
+ * not be considered a strong hash. Toss is not a crypto tool, so
+ * use something like GPG to encrypt your content prior to transferring
+ * it if you need better security. */
 
 #include <stdint.h>
 #include <string.h>
@@ -17,7 +17,8 @@
 #define SPECK_R(x, y, k) (x = SPECK_ROR(x, 8), x += y, x ^= k, y = SPECK_ROL(y, 3), y ^= x)
 #define SPECK_ROUNDS 32
 
-/* From: https://en.wikipedia.org/wiki/Speck_%28cipher%29 */
+/* Speck: a super-tiny ARX block cipher (128-bit variant) */
+/* https://en.wikipedia.org/wiki/Speck_%28cipher%29 */
 static void speck_encrypt(uint64_t pt[2],uint64_t ct[2],uint64_t K[2])
 {
 	uint64_t y = pt[0], x = pt[1], b = K[0], a = K[1];
@@ -30,7 +31,7 @@ static void speck_encrypt(uint64_t pt[2],uint64_t ct[2],uint64_t K[2])
 	ct[1] = x;
 }
 
-/* Merkle–Damgård hash function build from Speck */
+/* Simple 128-bit Merkle–Damgård hash function built from Speck */
 /* https://en.wikipedia.org/wiki/Merkle–Damgård_construction */
 
 struct speck_hash
@@ -71,12 +72,20 @@ static void speck_hash_update(struct speck_hash *h,const void *d,unsigned long l
 
 static void speck_hash_finalize(struct speck_hash *h,uint8_t digest[16])
 {
-	uint64_t final[2],tmp[2];
-	final[0] = h->totallen;
-	final[1] = ~h->totallen;
-	speck_encrypt(h->digest,tmp,final);
+	uint64_t pad[2],tmp[2];
+
+	/* Hash any remaining input */
+	if (h->nextblkptr)
+		speck_encrypt(h->digest,tmp,h->nextblk);
+
+	/* Merkle–Damgård length padding */
+	pad[0] = h->totallen;
+	pad[1] = ~h->totallen;
+	speck_encrypt(h->digest,tmp,pad);
 	h->digest[0] ^= tmp[0];
 	h->digest[1] ^= tmp[1];
+
+	/* Output digest in big-endian byte order */
 	digest[0] = (uint8_t)((h->digest[0] >> 56) & 0xff);
 	digest[1] = (uint8_t)((h->digest[0] >> 48) & 0xff);
 	digest[2] = (uint8_t)((h->digest[0] >> 40) & 0xff);

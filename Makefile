@@ -13,4 +13,4 @@ install: all
 	sudo chmod 0755 /usr/local/bin/toss /usr/local/bin/catch
 
 speck_test:
-	cc -O3 -o speck_test speck_test.c
+	cc -O3 -std=c99 -o speck_test speck_test.c

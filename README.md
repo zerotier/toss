@@ -1,25 +1,51 @@
-toss: dead simple LAN file transfer
+toss: dead simple command line file transfer
 ======
 
-Toss is a convenient ultra-minimal command line tool to send files over local area networks.
+Toss is a convenient ultra-minimal command line tool to send files over LAN, WiFi, and [virtual networks](https://www.zerotier.com/).
+
+## Examples
 
 ### Toss a file between two terminal windows
 
-System 1:
+Sender:
 
+    # toss nginx.conf
+    nginx.conf/rpyaaaaaaaaaatevqcopx2r56xbo4bakxpjzgeh5qblmfyq4ertt3gmtnncrxyou
 
+Receiver:
 
-System 2:
-
-
+    $ catch nginx.conf/rpyaaaaaaaaaatevqcopx2r56xbo4bakxpjzgeh5qblmfyq4ertt3gmtnncrxyou
+    catch: catching nginx.conf (19605 bytes)
+    catch: 10.187.211.147/35824 connected, reading... wrote 19605 bytes to: nginx.conf
 
 ### Toss a file to your team
 
-### Send something to an IRC channel from a VPS
+    # toss debug-output.log
+    debug-output.log/vd4qaaaaaaaaabqprfnhdzwnq3r2gbakxpjzgeh5qblmfyq4ertt3gmtnncrxyou
+
+Then paste the token into a chat system like IRC, Slack, etc.
 
 ### Stream a huge archive between systems
 
+Sender:
+
+    # tar -czf - /usr | toss -
+    ruz7777777777777tu3pjur2yqhtmbakxpjzgeh5qblmfyq4ertt3gmtnncrxyou
+
+Receiver:
+
+    $ catch ruz7777777777777tu3pjur2yqhtmbakxpjzgeh5qblmfyq4ertt3gmtnncrxyou - | tar -tzf -
+
 ### Toss the output of a command to a team member
+
+    $ ps aux | toss -
+    zmr7777777777777grxowcyqr4w3gbakxpjzgeh5qblmfyq4ertt3gmtnncrxyou
+
+Then paste the token into a chat and your team member can do this:
+
+    $ catch zmr7777777777777grxowcyqr4w3gbakxpjzgeh5qblmfyq4ertt3gmtnncrxyou -
+
+... and see the output of your `ps aux` command.
 
 ## Description
 

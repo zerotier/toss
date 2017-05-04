@@ -1,3 +1,5 @@
+/* (c)2017 ZeroTier, Inc. (Adam Ierymenko) -- MIT LICENSE */
+
 #ifndef TOSS_SPECK_HASH_H
 #define TOSS_SPECK_HASH_H
 
@@ -8,9 +10,6 @@
  * it if you need better security. */
 
 #include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 #define SPECK_ROR(x, r) ((x >> r) | (x << (64 - r)))
 #define SPECK_ROL(x, r) ((x << r) | (x >> (64 - r)))

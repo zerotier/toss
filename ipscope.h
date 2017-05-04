@@ -1,5 +1,9 @@
+/* (c)2017 ZeroTier, Inc. (Adam Ierymenko) -- MIT LICENSE */
+
 #ifndef TOSS_IPSCOPE_H
 #define TOSS_IPSCOPE_H
+
+#include <stdint.h>
 
 enum toss_ip_scope
 {

@@ -1,3 +1,5 @@
+/* (c)2017 ZeroTier, Inc. (Adam Ierymenko) -- MIT LICENSE */
+
 #ifndef TOSS_BASE32_H
 #define TOSS_BASE32_H
 

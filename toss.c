@@ -1,30 +1,22 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+/* (c)2017 ZeroTier, Inc. (Adam Ierymenko) -- MIT LICENSE */
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <sys/uio.h>
-#include <ifaddrs.h>
-#include <time.h>
-#include <fcntl.h>
-#include <unistd.h>
+#include "toss.h"
 
-#include "ipscope.h"
-#include "speck_hash.h"
-#include "base32.h"
-
-/* Do not change, must be a multiple of 5 */
-#define TOSS_MAX_TOKEN_BYTES 500
-
+#if defined(_WIN32) || defined(_WIN64)
+int __cdecl _tmain(int argc, _TCHAR* argv[])
+#else
 int main(int argc,char **argv)
+#endif
 {
 	uint8_t buf[16384];
 	char frombuf[128];
 	long n;
 	struct speck_hash sh;
+
+#if defined(_WIN32) || defined(_WIN64)
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2,2),&wsaData);
+#endif
 
 	srand((unsigned int)time(0));
 
@@ -33,15 +25,31 @@ int main(int argc,char **argv)
 		return 1;
 	}
 
-	const char *start_of_fn = strrchr(argv[1],'/');
-	const char *plainname = (start_of_fn) ? (start_of_fn + 1) : argv[1];
+#if defined(_WIN32) || defined(_WIN64)
+	const char *plainname = strrchr(argv[1],'\\');
+	if (plainname)
+		++plainname;
+	else plainname = argv[1];
+	if (strchr(plainname,'/')) {
+		fprintf(stderr,"%s: FATAL: / is not allowed in a file name.\n",argv[0]);
+		return 1;
+	}
+#else
+	const char *plainname = strrchr(argv[1],'/');
+	if (plainname)
+		++plainname;
+	else plainname = argv[1];
 	if (strchr(plainname,'\\')) {
 		fprintf(stderr,"%s: FATAL: \\ is not allowed in a file name.\n",argv[0]);
 		return 1;
 	}
+#endif
 
 	uint8_t ip4s[TOSS_MAX_TOKEN_BYTES],ip6s[TOSS_MAX_TOKEN_BYTES];
 	unsigned int ip4ptr = 0,ip6ptr = 0;
+#if defined(_WIN32) || defined(_WIN64)
+#error Windows interface address enumeration not implemented yet.
+#else
 	struct ifaddrs *ifa = (struct ifaddrs *)0;
 	if (getifaddrs(&ifa)) {
 		fprintf(stderr,"%s: FATAL: getifaddrs() failed (call failed).\n",argv[0]);
@@ -89,8 +97,15 @@ int main(int argc,char **argv)
 		}
 		ifa = ifa->ifa_next;
 	}
+#endif
 
-	int filefd = open(argv[1],O_RDONLY);
+	int filefd;
+	if (!strcmp(plainname,"-")) {
+		filefd = STDIN_FILENO;
+		plainname = (char *)0;
+	} else {
+		filefd = open(argv[1],O_RDONLY);
+	}
 	if (filefd < 0) {
 		fprintf(stderr,"%s: FATAL: unable to open for reading: %s\n",argv[0],argv[1]);
 		return 1;
@@ -103,6 +118,11 @@ int main(int argc,char **argv)
 		speck_hash_update(&sh,buf,(unsigned long)n);
 	}
 	speck_hash_finalize(&sh,filedigest);
+	if (!filelen) {
+		close(filefd);
+		fprintf(stderr,"%s: FATAL: zero byte file: %s\n",argv[0],argv[1]);
+		return 1;
+	}
 
 	int lsock = -1;
 	unsigned int port = 0;
@@ -180,18 +200,19 @@ int main(int argc,char **argv)
 
 	uint8_t claim[16];
 	speck_hash_reset(&sh);
-	speck_hash_update(&sh,"claim",5);
+	speck_hash_update(&sh,"toss1",5);
 	speck_hash_update(&sh,token,tokenlen);
 	speck_hash_update(&sh,"claim",5);
 	speck_hash_finalize(&sh,claim);
+
 	uint8_t hello[16];
 	speck_hash_reset(&sh);
-	speck_hash_update(&sh,"hello",5);
+	speck_hash_update(&sh,"toss1",5);
 	speck_hash_update(&sh,token,tokenlen);
 	speck_hash_update(&sh,"hello",5);
 	speck_hash_finalize(&sh,hello);
 
-	printf("%s/%s\n",plainname,hrtok);
+	printf("%s%s%s\n",(plainname) ? plainname : "",(plainname) ? "/" : "",hrtok);
 
 	int ok = 1;
 	for(int k=0;k<16;++k) {
@@ -225,9 +246,9 @@ int main(int argc,char **argv)
 		send(csock,hello,16,0);
 
 		long claimptr = 0;
-		while ((n = recv(csock,(void *)(buf + claimptr),16 - claimptr,0)) > 0)
+		while ((claimptr < 16)&&((n = recv(csock,(void *)(buf + claimptr),16 - claimptr,0)) > 0))
 			claimptr += n;
-		if (claimptr < 16) {
+		if (claimptr != 16) {
 			close(csock);
 			printf("empty or invalid claim code, waiting again...\n");
 			continue;
@@ -251,7 +272,7 @@ int main(int argc,char **argv)
 			continue;
 		} else {
 			ok = 0;
-			printf("sent %llu bytes. done!\n",(unsigned long long)filelen);
+			printf("was tossed %llu bytes.\n",(unsigned long long)filelen);
 			shutdown(csock,SHUT_WR);
 			close(csock);
 			break;
@@ -262,7 +283,7 @@ int main(int argc,char **argv)
 	close(lsock);
 
 	if (ok)
-		fprintf(stderr,"%s: FATAL: tried 16 times, failed to send.\n",argv[0]);
+		printf("%s: FAILED to toss: %s\n",argv[0],argv[1]);
 
 	return ok;
 }

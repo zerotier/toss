@@ -237,14 +237,9 @@ int main(int argc,char **argv)
 		long claimptr = 0;
 		while ((claimptr < 16)&&((n = recv(csock,(void *)(buf + claimptr),16 - claimptr,0)) > 0))
 			claimptr += n;
-		if (claimptr != 16) {
+		if ((claimptr != 16)||(memcmp(buf,claim,16))) {
 			close(csock);
-			fprintf(stderr,"empty or invalid claim code, waiting again...\n");
-			continue;
-		}
-		if (memcmp(buf,claim,16)) {
-			fprintf(stderr,"invalid claim code, waiting again...\n");
-			close(csock);
+			fprintf(stderr,"invalid claim code.\n");
 			continue;
 		}
 
@@ -254,12 +249,12 @@ int main(int argc,char **argv)
 			uint64_t wrote = 0;
 			while ((n = read(filefd,buf,sizeof(buf))) > 0) {
 				if ((long)send(csock,buf,n,0) != n) {
-					fprintf(stderr,"send incomplete (wrote %llu bytes), waiting again.\n",(unsigned long long)wrote);
+					fprintf(stderr,"send incomplete, wrote %llu bytes.\n",(unsigned long long)wrote);
 					break;
 				}
 				wrote += n;
 			}
-			fprintf(stderr,"tossed %llu bytes, waiting again.\n",(unsigned long long)wrote);
+			fprintf(stderr,"tossed %llu bytes.\n",(unsigned long long)wrote);
 			shutdown(csock,SHUT_WR);
 			close(csock);
 			break;
@@ -267,11 +262,11 @@ int main(int argc,char **argv)
 			lseek(filefd,0,SEEK_SET);
 			off_t flen = (off_t)filelen;
 			if (sendfile(filefd,csock,0,&flen,(struct sf_hdtr *)0,0)) {
-				fprintf(stderr,"sendfile() failed, waiting again.\n");
+				fprintf(stderr,"sendfile() failed.\n");
 			} else if (flen != (off_t)filelen) {
-				fprintf(stderr,"sendfile() incomplete (wrote %llu bytes), waiting again.\n",(unsigned long long)flen);
+				fprintf(stderr,"sendfile() incomplete, wrote %llu bytes.\n",(unsigned long long)flen);
 			} else {
-				fprintf(stderr,"tossed %llu bytes, waiting again.\n",(unsigned long long)filelen);
+				fprintf(stderr,"tossed %llu bytes.\n",(unsigned long long)filelen);
 				shutdown(csock,SHUT_WR);
 			}
 			close(csock);

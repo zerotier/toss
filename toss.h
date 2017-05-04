@@ -26,6 +26,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
+#if defined(__linux__) || defined(linux) || defined(__LINUX__) || defined(__linux)
+#include <sys/sendfile.h>
+#endif
 #endif
 
 #include "ipscope.h"

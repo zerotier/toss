@@ -1,4 +1,4 @@
-toss: dead simple LAN file transfers from the command line
+toss: dead simple LAN file transfer
 ======
 
 Toss is a convenient ultra-minimal command line tool to send files over local area networks.
@@ -31,6 +31,13 @@ Some work has been done to prepare for a Windows port but this is incomplete. Pu
 
 ### Toss a file between two terminal windows
 
+System 1:
+
+
+System 2:
+
+
+
 ### Toss a file to your team
 
 ### Send something to an IRC channel from a VPS
@@ -38,3 +45,7 @@ Some work has been done to prepare for a Windows port but this is incomplete. Pu
 ### Stream a huge archive between systems
 
 ### Toss the output of a command to a team member
+
+## License
+
+MIT license.

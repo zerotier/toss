@@ -47,44 +47,56 @@ int main(int argc,char **argv)
 
 	uint8_t ip4s[TOSS_MAX_TOKEN_BYTES],ip6s[TOSS_MAX_TOKEN_BYTES];
 	unsigned int ip4ptr = 0,ip6ptr = 0;
+
 #if defined(_WIN32) || defined(_WIN64)
 #error Windows interface address enumeration not implemented yet.
 #else
-	struct ifaddrs *ifa = (struct ifaddrs *)0;
-	if (getifaddrs(&ifa)) {
+	/* We do this in four passes. The first grabs interfaces that start with
+	 * 'z' (zt#), the second 't' (tun#/tap#), the third 'i' (ipsec#), and the
+	 * final pass grabs anything else (eth#, etc.). This makes us prioritize
+	 * encapsulated encrypted interaces like ZeroTier and OpenVPN over others.
+	 * Catch has its own priority, trying private IPs first and then globally
+	 * scoped ones. These two priorities work together to prefer secure and
+	 * possibly virtual routes. */
+	struct ifaddrs *ifalist = (struct ifaddrs *)0;
+	if (getifaddrs(&ifalist)) {
 		fprintf(stderr,"%s: FATAL: getifaddrs() failed (call failed).\n",argv[0]);
 		return 1;
 	}
-	if (!ifa) {
+	if (!ifalist) {
 		fprintf(stderr,"%s: FATAL: getifaddrs() failed (null result).\n",argv[0]);
 		return 1;
 	}
-	while (ifa) {
-		if (ifa->ifa_addr) {
-			enum toss_ip_scope ipscope = IP_SCOPE_NONE;
-			switch(ifa->ifa_addr->sa_family) {
-				case AF_INET:
-					if ((ip4ptr + 4) <= TOSS_MAX_TOKEN_BYTES) {
-						ipscope = classify_ip4((struct sockaddr_in *)ifa->ifa_addr);
-						if ((ipscope == IP_SCOPE_PRIVATE)||(ipscope == IP_SCOPE_GLOBAL)||(ipscope == IP_SCOPE_SHARED)) {
-							memcpy(ip4s + ip4ptr,&(((const struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr),4);
-							ip4ptr += 4;
+	for(int pass=0;pass<4;++pass) {
+		struct ifaddrs *ifa = ifalist;
+		while (ifa) {
+			if ( (ifa->ifa_addr) && ( (pass == 3) || ( (ifa->ifa_name) && (ifa->ifa_name[0] == "zti"[pass]) ) ) ) {
+				enum toss_ip_scope ipscope = IP_SCOPE_NONE;
+				switch(ifa->ifa_addr->sa_family) {
+					case AF_INET:
+						if ((ip4ptr + 4) <= TOSS_MAX_TOKEN_BYTES) {
+							ipscope = classify_ip4((struct sockaddr_in *)ifa->ifa_addr);
+							if ((ipscope == IP_SCOPE_PRIVATE)||(ipscope == IP_SCOPE_GLOBAL)||(ipscope == IP_SCOPE_SHARED)) {
+								memcpy(ip4s + ip4ptr,&(((const struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr),4);
+								ip4ptr += 4;
+							}
 						}
-					}
-					break;
-				case AF_INET6:
-					if ((ip6ptr + 16) <= TOSS_MAX_TOKEN_BYTES) {
-						ipscope = classify_ip6((struct sockaddr_in6 *)ifa->ifa_addr);
-						if ((ipscope == IP_SCOPE_PRIVATE)||(ipscope == IP_SCOPE_GLOBAL)||(ipscope == IP_SCOPE_SHARED)) {
-							memcpy(ip6s + ip6ptr,((const struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr.s6_addr,16);
-							ip6ptr += 16;
+						break;
+					case AF_INET6:
+						if ((ip6ptr + 16) <= TOSS_MAX_TOKEN_BYTES) {
+							ipscope = classify_ip6((struct sockaddr_in6 *)ifa->ifa_addr);
+							if ((ipscope == IP_SCOPE_PRIVATE)||(ipscope == IP_SCOPE_GLOBAL)||(ipscope == IP_SCOPE_SHARED)) {
+								memcpy(ip6s + ip6ptr,((const struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr.s6_addr,16);
+								ip6ptr += 16;
+							}
 						}
-					}
-					break;
+						break;
+				}
 			}
+			ifa = ifa->ifa_next;
 		}
-		ifa = ifa->ifa_next;
 	}
+	freeifaddrs(ifalist);
 #endif
 
 	int filefd;

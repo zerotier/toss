@@ -79,4 +79,5 @@ MIT license.
 
 ## Changes
 
+ * Version 1.1: add a DESTDIR to `make install` and make toss favor ZeroTier and tun/tap interfaces over physical ones. It just lists them first so catch will try them first.
  * Version 1.0: initial release!

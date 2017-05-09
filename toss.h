@@ -8,6 +8,8 @@
 #define _FILE_OFFSET_BITS 64
 #endif
 
+#define TOSS_VERSION "1.1"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -22,8 +22,6 @@ int main(int argc,char **argv)
 #if defined(_WIN32) || defined(_WIN64)
 	WSADATA wsaData;
 	WSAStartup(MAKEWORD(2,2),&wsaData);
-#else
-	signal(SIGALRM,catch_sigalrm);
 #endif
 
 	if ((argc < 2)||(argc > 3)) {
@@ -150,7 +148,13 @@ int main(int argc,char **argv)
 				}
 #endif
 
+#if defined(_WIN32) || defined(_WIN64)
+#error No timeout implementation for Windows yet.
+#else
+				signal(SIGALRM,catch_sigalrm);
 				alarm(TRY_SCOPE_TIMEOUT[k]);
+#endif
+
 				if (connect(csock,(struct sockaddr *)&sa,(sa.ss_family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6))) {
 					alarm(0);
 					close(csock);

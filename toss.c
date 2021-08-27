@@ -176,19 +176,22 @@ int main(int argc,char **argv)
 	for(int i=0;i<8;++i) /* use first 8 bytes of file digest */
 		token[tokenlen++] = filedigest[i];
 	unsigned int ip4ptr2 = 0,ip6ptr2 = 0;
-	n = 0;
-  while ((ip4ptr2 < ip4ptr)&&((tokenlen + 17 + 5) <= TOSS_MAX_TOKEN_BYTES)) {
-	// while ((ip4ptr2 < ip4ptr)&&(ip6ptr2 < ip6ptr)&&((tokenlen + 17 + 5) <= TOSS_MAX_TOKEN_BYTES)) {
-		if (n) {
-			token[tokenlen++] = 16;
-			for(int i=0;i<16;++i)
-				token[tokenlen++] = ip6s[ip6ptr2++];
-		} else {
+	while ((tokenlen + 17 + 5) <= TOSS_MAX_TOKEN_BYTES) {
+		if(ip4ptr2 < ip4ptr) {
 			token[tokenlen++] = 4;
 			for(int i=0;i<4;++i)
 				token[tokenlen++] = ip4s[ip4ptr2++];
 		}
-		// n ^= 1;
+
+		if (ip6ptr2 < ip6ptr) {
+			token[tokenlen++] = 16;
+			for(int i=0;i<16;++i)
+				token[tokenlen++] = ip6s[ip6ptr2++];
+		}
+
+		if((ip6ptr2 >= ip6ptr) && (ip4ptr2 >= ip4ptr)) {
+			break;
+		}
 	}
 	while ((tokenlen % 5) != 0)
 		++tokenlen;
